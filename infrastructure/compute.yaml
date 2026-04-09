@@ -35,6 +35,17 @@ Resources:
           ToPort: 22
           CidrIp: 0.0.0.0/0
 
+  # 8. The Scaling Policy (The Brain)
+  FlashSaleScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref FlashSaleASG
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50.0  # Keep CPU at 50%. If it hits 100%, AWS will PANIC.
+
   # 3. The Application Load Balancer (The Traffic Cop)
   FlashSaleALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
