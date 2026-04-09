@@ -75,11 +75,16 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
+            # Standard Web Server Installation for Amazon Linux 2 & 2023
             yum update -y
-            yum install -y httpd stress
+            yum install -y httpd
+            
+            # Start and enable the web server
             systemctl start httpd
             systemctl enable httpd
-            echo "<h1>Welcome to the Ultimate Flash Sale!</h1><p>Server ID: $HOSTNAME</p>" > /var/www/html/index.html
+            
+            # Create the landing page
+            echo "<h1>Welcome to the Ultimate Flash Sale!</h1><p>Server ID: $(hostname)</p>" > /var/www/html/index.html
 
   # 7. The Auto Scaling Group (The Engine)
   FlashSaleASG:
@@ -92,8 +97,10 @@ Resources:
         LaunchTemplateId: !Ref FlashSaleLaunchTemplate
         Version: !GetAtt FlashSaleLaunchTemplate.LatestVersionNumber
       MinSize: '1'
-      MaxSize: '4' # Will scale up to 4 servers under heavy load!
+      MaxSize: '4'
       DesiredCapacity: '1'
+      HealthCheckType: ELB           # Tells ASG to listen to the Load Balancer's opinion
+      HealthCheckGracePeriod: 300    # Wait 5 minutes before marking a server as failed
       TargetGroupARNs:
         - !Ref FlashSaleTargetGroup
 
