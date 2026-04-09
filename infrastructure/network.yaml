@@ -71,6 +71,38 @@ Resources:
         - Key: Name
           Value: FlashSale-Private-Subnet-2
 
+  # 5. The Route Table (The Hallway)
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FlashSaleVPC
+      Tags:
+        - Key: Name
+          Value: FlashSale-Public-RT
+
+  # 6. The Route (The instruction to use the Front Door)
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # 7. Associating Subnet 1 with the Route Table
+  PublicSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # 8. Associating Subnet 2 with the Route Table
+  PublicSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
 Outputs:
   VpcId:
     Description: The ID of the VPC
