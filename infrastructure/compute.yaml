@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Flash Sale Project - Phase 2: Auto-Scaling Web Servers and Load Balancer'
+
+Resources:
+  # 1. The Load Balancer's Firewall (Allows anyone on the internet)
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic from the internet
+      VpcId: !ImportValue FlashSale-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  # 2. The Web Servers' Firewall (ONLY allows traffic from the Load Balancer)
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic ONLY from the ALB
+      VpcId: !ImportValue FlashSale-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+  # 3. The Application Load Balancer (The Traffic Cop)
+  FlashSaleALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: FlashSale-ALB
+      Subnets:
+        - !ImportValue FlashSale-PublicSubnet1
+        - !ImportValue FlashSale-PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  # 4. Target Group (Where the ALB sends the traffic)
+  FlashSaleTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !ImportValue FlashSale-VpcId
+      Port: 80
+      Protocol: HTTP
+      Matcher:
+        HttpCode: '200'
+
+  # 5. The ALB Listener (Listens on port 80 and forwards to Target Group)
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref FlashSaleALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FlashSaleTargetGroup
+
+  # 6. The Server Blueprint (Launch Template)
+  FlashSaleLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: ami-0c55b159cbfafe1f0 # Standard Amazon Linux 2 AMI
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd stress
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Welcome to the Ultimate Flash Sale!</h1><p>Server ID: $HOSTNAME</p>" > /var/www/html/index.html
+
+  # 7. The Auto Scaling Group (The Engine)
+  FlashSaleASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !ImportValue FlashSale-PublicSubnet1
+        - !ImportValue FlashSale-PublicSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref FlashSaleLaunchTemplate
+        Version: !GetAtt FlashSaleLaunchTemplate.LatestVersionNumber
+      MinSize: '1'
+      MaxSize: '4' # Will scale up to 4 servers under heavy load!
+      DesiredCapacity: '1'
+      TargetGroupARNs:
+        - !Ref FlashSaleTargetGroup
+
+Outputs:
+  WebsiteURL:
+    Description: The public URL of the Flash Sale Load Balancer
+    Value: !GetAtt FlashSaleALB.DNSName
